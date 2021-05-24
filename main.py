@@ -5,22 +5,13 @@ import scipy.integrate as spint
 #wartosci poczatkowe
 c=0
 f=0
-x_a=4
-x_b=10
-liczba_wezlow=7
-
-#wezly=np.array([[1,0],[2,1],[3,0.5],[4, 0.75]])
-#elementy= np.array([[1, 1, 3],[2, 4, 2],[3, 3, 4]])
-
-twb_L = 'D'
-twb_R = 'D'
-
-wwb_L = 0
-wwb_R = 1
+x_a=0
+x_b=1
+liczba_wezlow=8
 
 #Warunki Brzegowe
 WB= [{"ind":1, "typ":'D', "wartosc":1},
-     {"ind":2, "typ":'D', "wartosc":2}]
+     {"ind":liczba_wezlow, "typ":'D', "wartosc":2}]
 #print(WB[1]["ind"]) - wywolanie konkretnego elementu z tablicy slownikow
 
 #funkcja generowania tablicy geometrii
@@ -57,12 +48,12 @@ def rysowanie(wezly,liczba_wezlow):
     # podpisy punktow
     for i in range(0, liczba_wezlow, 1):
         f = "x" + str(i + 1)
-        plt.annotate(f, (wezly[i, 1] - 0.25, -0.006), color='green')
+        plt.annotate(f, (wezly[i, 1], -0.006), color='green')
 
     # podpisy elementów
     for i in range(0, liczba_wezlow - 1, 1):
         g = "s" + str(i + 1)
-        plt.annotate(g, ((wezly[i, 1] + wezly[i + 1, 1]) / 2 - 0.2, 0.01), color='blue')
+        plt.annotate(g, ((wezly[i, 1] + wezly[i + 1, 1]) / 2, 0.005), color='blue')
 
     plt.grid(True)
     plt.show()
@@ -72,7 +63,7 @@ wezly, elementy = GenerujTabliceGeometrii(x_a, x_b, liczba_wezlow)
 print("WEZLY:\n", wezly)
 print("\nELEMENTY:\n", elementy)
 
-#rysowanie(wezly,liczba_wezlow)
+rysowanie(wezly,liczba_wezlow)
 
 #------------------------------------------------------------------------ Pierwsza czesc koniec ---------------------------------------------------------------------------------------------------
 
@@ -117,25 +108,90 @@ print("------------")
 print(A)
 print(b)
 
-#------------------Preprocesing--------------------------------
+#------------------Processing--------------------------------
+
+def Aij(df_i, df_j, c, f_i, f_j):
+    fun_podc = lambda x: -df_i(x) * df_j(x) + c * f_i(x) * f_j(x)
+    return fun_podc
+
+#A,b = Alokacja(liczba_wezlow)
 
 liczbaElementow = np.shape(elementy)[0]
+
 for ee in np.arange(0,liczbaElementow):
 
     elemRowInd=ee
     elemGlobalInd=elementy[ee,0]
     elemWezel1 = elementy[ee,1]  #indeks poczatkowego wezla elementu ee
     elemWezel2 = elementy[ee, 2] #indeks koncowego wezla elementu ee
+    indGlobalneWezlow=np.array([elemWezel1,elemWezel2])
 
-    Ml = np.zeros((stopien_funkcji_bazowych + 1, stopien_funkcji_bazowych + 1))
-
-    def Aij(df_i, df_j, c, f_i, f_j):
-        fun_podc=lambda x: -df_i(x)*df_j(x) + c * f_i(x)*f_j(x)
-        return fun_podc
+    Ml = np.zeros((stopien_funkcji_bazowych + 1, stopien_funkcji_bazowych + 1))#nawiasy
 
     p_a = wezly[elemWezel1-1,1]
     p_b = wezly[elemWezel2-1,1]
 
     J = (p_b-p_a)/2
 
-    Ml[0,0] = J * spint.quad(Aij(dphi[0],dphi[0],c,phi[0],phi[0]),-1,1)
+    m=0
+    n=0
+    Ml[m,n] = J * spint.quad(Aij(dphi[m],dphi[n],c,phi[m],phi[n]),-1,1)[0]
+
+    m=0
+    n=1
+    Ml[m,n] = J * spint.quad(Aij(dphi[m],dphi[n],c,phi[m],phi[n]),-1,1)[0]
+
+    m=1
+    n=0
+    Ml[m,n] = J * spint.quad(Aij(dphi[m],dphi[n],c,phi[m],phi[n]),-1,1)[0]
+
+    m=1
+    n=1
+    Ml[m,n] = J * spint.quad(Aij(dphi[m],dphi[n],c,phi[m],phi[n]),-1,1)[0]
+
+    A[np.ix_(indGlobalneWezlow-1,indGlobalneWezlow-1)] = A[np.ix_(indGlobalneWezlow-1,indGlobalneWezlow-1)]+Ml
+
+print(WB)
+
+if WB[0]['typ'] == 'D':
+    ind_wezla = WB[0]['ind']
+    wart_war_brzeg = WB[0]['wartosc']
+
+    iwp = ind_wezla-1
+
+    WZMACNIACZ = 10**14
+
+    b[iwp] = A[iwp,iwp]*WZMACNIACZ*wart_war_brzeg
+    A[iwp,iwp] = A[iwp,iwp]*WZMACNIACZ
+
+if WB[1]['typ'] == 'D':
+    ind_wezla = WB[1]['ind']
+    wart_war_brzeg = WB[1]['wartosc']
+
+    iwp = ind_wezla - 1
+
+    WZMACNIACZ = 10**14
+
+    b[iwp] = A[iwp, iwp] * WZMACNIACZ * wart_war_brzeg
+    A[iwp, iwp] = A[iwp, iwp] * WZMACNIACZ
+
+
+if WB[0]['typ'] == 'N':
+    print("Nie zaimplementowano")
+
+if WB[1]['typ'] == 'N':
+    print("Nie zaimplementowano")
+
+u=np.linalg.solve(A,b)
+
+
+def rysujRozwiazanie(wezly,elementy,WB,u):
+    wewx=wezly[:,1]
+    plt.plot(wewx,u,'m*')
+    plt.show()
+
+rysujRozwiazanie(wezly,elementy,WB,u)
+
+print("------------")
+print(A)
+print(b)
